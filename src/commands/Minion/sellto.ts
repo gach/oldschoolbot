@@ -21,7 +21,7 @@ export default class extends BotCommand {
 		super(store, file, directory, {
 			cooldown: 20,
 			usage:
-				'<member:member> <price:int{1,100000000000}> <quantity:int{1,2000000}> <itemname:...string>',
+				'<member:member> <price:int{1,100000000000}> <quantity:int{1,2000000}|itemname:...string> [itemname:...string]',
 			usageDelim: ' ',
 			oneAtTime: true,
 			ironCantUse: true
@@ -30,27 +30,46 @@ export default class extends BotCommand {
 
 	async run(
 		msg: KlasaMessage,
-		[buyerMember, price, quantity, itemName]: [GuildMember, number, number, string]
+		[buyerMember, price, quantity, itemName = '']: [GuildMember, number, number, string]
 	) {
-		if (msg.author.isIronman) throw `Iron players can't sell items.`;
-		if (buyerMember.user.isIronman) throw `Iron players can't be sold items.`;
-		if (buyerMember.user.id === msg.author.id) throw `You can't trade yourself.`;
-		if (buyerMember.user.bot) throw `You can't trade a bot.`;
+		if (typeof quantity === 'string') {
+			itemName = quantity;
+			quantity = 0;
+		}
+		if (msg.author.isIronman) {
+			throw `Iron players can't sell items.`;
+		}
+		if (buyerMember.user.isIronman) {
+			throw `Iron players can't be sold items.`;
+		}
+		if (buyerMember.user.id === msg.author.id) {
+			throw `You can't trade yourself.`;
+		}
+		if (buyerMember.user.bot) {
+			throw `You can't trade a bot.`;
+		}
 		if (buyerMember.user.isBusy) {
 			throw `That user is busy right now.`;
 		}
-
 		if (buyerMember.user.settings.get(UserSettings.GP) < price) {
 			throw `That user doesn't have enough GP :(`;
 		}
 		const osItem = TradeableItems.find(item =>
 			stringMatches(item.name, cleanItemName(itemName))
 		);
-		if (!osItem) throw `That item doesnt exist.`;
-		const tradeable = itemIsTradeable(osItem.id);
-
-		if (!tradeable) {
+		if (!osItem) {
+			throw `That item doesnt exist.`;
+		}
+		if (!itemIsTradeable(osItem.id)) {
 			throw `That item is not tradeable.`;
+		}
+
+		const numItemsHas = await msg.author.numberOfItemInBank(osItem.id);
+		if (numItemsHas === 0) {
+			throw `You don't have any of this item to sell!`;
+		}
+		if (!quantity) {
+			quantity = numItemsHas;
 		}
 
 		buyerMember.user.toggleBusy(true);
