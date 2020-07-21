@@ -25,6 +25,8 @@ import { SkillsEnum } from '../../lib/skilling/types';
 import getUsersPerkTier from '../../lib/util/getUsersPerkTier';
 import { requiresMinion } from '../../lib/minions/decorators';
 import findMonster from '../../lib/minions/functions/findMonster';
+import { bankHasAllItemsFromBank, multiplyBank, removeBankFromBank } from 'oldschooljs/dist/util';
+import createReadableItemListFromBank from '../../lib/util/createReadableItemListFromTuple';
 
 const invalidMonster = (prefix: string) =>
 	`That isn't a valid monster, the available monsters are: ${killableMonsters
@@ -555,6 +557,26 @@ ${Emoji.QuestIcon} QP: ${msg.author.settings.get(UserSettings.QP)}
 			)}, try a lower quantity. The highest amount you can do for ${
 				monster.name
 			} is ${Math.floor(msg.author.maxTripLength / timeToFinish)}.`;
+		}
+
+		if (monster.consumedItem) {
+			const consumedItems = multiplyBank(monster.consumedItem, quantity);
+
+			const consumedItemsString = await createReadableItemListFromBank(
+				this.client,
+				consumedItems
+			);
+
+			const userBank = msg.author.settings.get(UserSettings.Bank);
+
+			if (!bankHasAllItemsFromBank(userBank, consumedItems)) {
+				throw `You don't have the required items, you need: ${consumedItemsString}`;
+			}
+
+			await msg.author.settings.update(
+				UserSettings.Bank,
+				removeBankFromBank(userBank, consumedItems)
+			);
 		}
 
 		const randomAddedDuration = rand(1, 20);

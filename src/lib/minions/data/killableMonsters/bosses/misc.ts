@@ -5,6 +5,7 @@ import resolveItems, { deepResolveItems } from '../../../../util/resolveItems';
 import itemID from '../../../../util/itemID';
 import { Time } from '../../../../constants';
 import { bosses } from '../../../../collectionLog';
+import { resolveNameBank } from 'oldschooljs/dist/util';
 
 const killableBosses: KillableMonster[] = [
 	{
@@ -163,6 +164,20 @@ const killableBosses: KillableMonster[] = [
 		levelRequirements: {
 			prayer: 43
 		}
+	},
+	{
+		id: Monsters.Obor.id,
+		name: Monsters.Obor.name,
+		aliases: Monsters.Obor.aliases,
+		timeToFinish: Time.Minute * 1.25,
+		table: Monsters.Obor,
+		emoji: '',
+		notifyDrops: resolveItems(['Hill giant club']),
+		wildy: false,
+		canBeKilled: false,
+		difficultyRating: 0,
+		qpRequired: 0,
+		consumedItem: resolveNameBank({ 'Giant Key': 1 })
 	}
 ];
 
