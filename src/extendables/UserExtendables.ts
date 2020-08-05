@@ -86,6 +86,35 @@ export default class extends Extendable {
 		return this.settings.update(UserSettings.GP, currentGP + amount);
 	}
 
+	public async addCommendationPoints(this: User, amount: number) {
+		await this.settings.sync(true);
+		const currentCommendationPoints = this.settings.get(UserSettings.CommendationPoints);
+		this.log(
+			`had ${amount} commendation points added. BeforeBalance[${currentCommendationPoints}] NewBalance[${currentCommendationPoints +
+				amount}]`
+		);
+
+		return this.settings.update(
+			UserSettings.CommendationPoints,
+			currentCommendationPoints + amount
+		);
+	}
+
+	public async removeCommendationPoints(this: User, amount: number) {
+		await this.settings.sync(true);
+		const currentCommendationPoints = this.settings.get(UserSettings.CommendationPoints);
+		if (currentCommendationPoints < amount)
+			throw `${this.sanitizedName} doesn't have enough commendation points.`;
+		this.log(
+			`had ${amount} commendation points removed. BeforeBalance[${currentCommendationPoints}] NewBalance[${currentCommendationPoints -
+				amount}]`
+		);
+		return this.settings.update(
+			UserSettings.CommendationPoints,
+			currentCommendationPoints - amount
+		);
+	}
+
 	public async addQP(this: User, amount: number) {
 		await this.settings.sync(true);
 		const currentQP = this.settings.get(UserSettings.QP);
