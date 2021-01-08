@@ -2,6 +2,7 @@ import { Task } from 'klasa';
 
 import { Events } from '../../lib/constants';
 import clueTiers from '../../lib/minions/data/clueTiers';
+import { UserSettings } from '../../lib/settings/types/UserSettings';
 import { ClueActivityTaskOptions } from '../../lib/types/minions';
 import { handleTripFinish } from '../../lib/util/handleTripFinish';
 
@@ -33,6 +34,22 @@ export default class extends Task {
 			`${user.username}[${user.id}] received ${quantity} ${clueTier.name} Clue Caskets.`
 		);
 
-		handleTripFinish(this.client, user, channelID, str, undefined, undefined, data);
+		handleTripFinish(
+			this.client,
+			user,
+			channelID,
+			str,
+			user.settings.get(UserSettings.Bank)[clueTier.scrollID]
+				? res => {
+						user.log(`continued trip of ${quantity}x ${clueTier.name} clues`);
+						return this.client.commands
+							.get('mclue')!
+							.run(res, [quantity, clueTier.name]);
+				  }
+				: undefined,
+			data,
+			undefined,
+			loot
+		);
 	}
 }

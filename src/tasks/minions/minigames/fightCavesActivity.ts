@@ -3,7 +3,7 @@ import { Monsters } from 'oldschooljs';
 import TzTokJad from 'oldschooljs/dist/simulation/monsters/special/TzTokJad';
 
 import { Emoji, Events } from '../../../lib/constants';
-import mejJalImage from '../../../lib/image/mejJalImage';
+import chatHeadImage from '../../../lib/image/chatHeadImage';
 import fightCavesSupplies from '../../../lib/minions/data/fightCavesSupplies';
 import { UserSettings } from '../../../lib/settings/types/UserSettings';
 import { FightCavesActivityTaskOptions } from '../../../lib/types/minions';
@@ -19,19 +19,15 @@ import {
 import { channelIsSendable } from '../../../lib/util/channelIsSendable';
 import createReadableItemListFromBank from '../../../lib/util/createReadableItemListFromTuple';
 import { formatOrdinal } from '../../../lib/util/formatOrdinal';
+import { handleTripFinish } from '../../../lib/util/handleTripFinish';
 import itemID from '../../../lib/util/itemID';
 
 const TokkulID = itemID('Tokkul');
 const TzrekJadPet = itemID('Tzrek-jad');
 
 export default class extends Task {
-	async run({
-		userID,
-		channelID,
-		jadDeathChance,
-		preJadDeathTime,
-		duration
-	}: FightCavesActivityTaskOptions) {
+	async run(data: FightCavesActivityTaskOptions) {
+		const { userID, channelID, jadDeathChance, preJadDeathTime, duration } = data;
 		const user = await this.client.users.fetch(userID);
 		user.incrementMinionDailyDuration(duration);
 		const channel = await this.client.channels.fetch(channelID).catch(noOp);
@@ -41,6 +37,14 @@ export default class extends Task {
 
 		const attempts = user.settings.get(UserSettings.Stats.FightCavesAttempts) ?? 0;
 		await user.settings.update(UserSettings.Stats.FightCavesAttempts, attempts + 1);
+
+		let str = `${user}`;
+		let image: Buffer = await chatHeadImage({
+			content: `Placeholder to initialize image variable`,
+			name: 'TzHaar-Mej-Jal',
+			head: 'mejJal'
+		});
+		let stillAlive = true;
 
 		const attemptsStr = `You have tried Fight caves ${attempts + 1}x times.`;
 
@@ -59,67 +63,85 @@ export default class extends Task {
 
 			await user.addItemsToBank(itemLootBank, true);
 
-			if (!channelIsSendable(channel)) return;
-			return channel.send(
-				`${user} You died ${formatDuration(
-					preJadDeathTime
-				)} into your attempt. The following supplies were refunded back into your bank: ${await createReadableItemListFromBank(
-					this.client,
-					removeItemFromBank(itemLootBank, TokkulID, itemLootBank[TokkulID])
-				)}.`,
-				await mejJalImage(
-					`You die before you even reach TzTok-Jad...atleast you tried, I give you ${tokkulReward}x Tokkul. ${attemptsStr}`
-				)
-			);
+			stillAlive = false;
+			str = `${user} You died ${formatDuration(
+				preJadDeathTime
+			)} into your attempt. The following supplies were refunded back into your bank: ${await createReadableItemListFromBank(
+				this.client,
+				removeItemFromBank(itemLootBank, TokkulID, itemLootBank[TokkulID])
+			)}.`;
+			image = await chatHeadImage({
+				content: `You die before you even reach TzTok-Jad...atleast you tried, I give you ${tokkulReward}x Tokkul. ${attemptsStr}`,
+				name: 'TzHaar-Mej-Jal',
+				head: 'mejJal'
+			});
 		}
 
-		if (diedToJad) {
+		if (diedToJad && stillAlive) {
 			await user.addItemsToBank({ [TokkulID]: tokkulReward }, true);
 
-			if (!channelIsSendable(channel)) return;
-			return channel.send(
-				`${user}`,
-				await mejJalImage(
-					`TzTok-Jad stomp you to death...nice try though JalYt, for your effort I give you ${tokkulReward}x Tokkul. ${attemptsStr}`
-				)
-			);
+			stillAlive = false;
+			image = await chatHeadImage({
+				content: `TzTok-Jad stomp you to death...nice try though JalYt, for your effort I give you ${tokkulReward}x Tokkul. ${attemptsStr}`,
+				name: 'TzHaar-Mej-Jal',
+				head: 'mejJal'
+			});
 		}
 
-		await user.incrementMonsterScore(Monsters.TzTokJad.id);
-		const loot = Monsters.TzTokJad.kill();
+		if (stillAlive) {
+			await user.incrementMonsterScore(Monsters.TzTokJad.id);
+			const loot = Monsters.TzTokJad.kill();
 
-		if (loot[TzrekJadPet]) {
-			this.client.emit(
-				Events.ServerNotification,
-				`**${user.username}** just received their ${formatOrdinal(
-					user.getCL(TzrekJadPet) + 1
-				)} ${Emoji.TzRekJad} TzRek-jad pet by killing TzTok-Jad, on their ${formatOrdinal(
-					user.getKC(TzTokJad)
-				)} kill!`
-			);
+			if (loot[TzrekJadPet]) {
+				this.client.emit(
+					Events.ServerNotification,
+					`**${user.username}** just received their ${formatOrdinal(
+						user.getCL(TzrekJadPet) + 1
+					)} ${
+						Emoji.TzRekJad
+					} TzRek-jad pet by killing TzTok-Jad, on their ${formatOrdinal(
+						user.getKC(TzTokJad)
+					)} kill!`
+				);
+			}
+
+			if (user.getCL(itemID('Fire cape')) === 0) {
+				this.client.emit(
+					Events.ServerNotification,
+					`**${
+						user.username
+					}** just received their first Fire cape on their ${formatOrdinal(
+						attempts + 1
+					)} attempt!`
+				);
+			}
+
+			await user.addItemsToBank(loot, true);
+
+			const lootText = await createReadableItemListFromBank(this.client, loot);
+
+			image = await chatHeadImage({
+				content: `You defeated TzTok-Jad for the ${formatOrdinal(
+					user.getKC(Monsters.TzTokJad)
+				)} time! I am most impressed, I give you... ${lootText}.`,
+				name: 'TzHaar-Mej-Jal',
+				head: 'mejJal'
+			});
 		}
-
-		if (user.getCL(itemID('Fire cape')) === 0) {
-			this.client.emit(
-				Events.ServerNotification,
-				`**${user.username}** just received their first Fire cape on their ${formatOrdinal(
-					attempts + 1
-				)} attempt!`
-			);
-		}
-
-		await user.addItemsToBank(loot, true);
-
-		const lootText = await createReadableItemListFromBank(this.client, loot);
 
 		if (!channelIsSendable(channel)) return;
-		return channel.send(
-			`${user}`,
-			await mejJalImage(
-				`You defeated TzTok-Jad for the ${formatOrdinal(
-					user.getKC(Monsters.TzTokJad)
-				)} time! I am most impressed, I give you... ${lootText}.`
-			)
+
+		handleTripFinish(
+			this.client,
+			user,
+			channelID,
+			str,
+			res => {
+				user.log(`continued trip of fight caves`);
+				return this.client.commands.get('fightcaves')!.run(res, []);
+			},
+			data,
+			image
 		);
 	}
 }

@@ -75,8 +75,9 @@ export default class extends Task {
 				user.log(`continued trip of ${quantity}x ${Log.name}[${Log.id}]`);
 				return this.client.commands.get('chop')!.run(res, [quantity, Log.name]);
 			},
+			data,
 			undefined,
-			data
+			loot
 		);
 	}
 }

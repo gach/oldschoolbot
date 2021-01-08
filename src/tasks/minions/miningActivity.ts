@@ -117,7 +117,7 @@ export default class extends Task {
 			str += `\n\n**Bonus XP:** ${bonusXP.toLocaleString()}`;
 		}
 
-		await user.addItemsToBank(loot.values(), true);
+		await user.addItemsToBank(loot.bank, true);
 
 		handleTripFinish(
 			this.client,
@@ -128,8 +128,9 @@ export default class extends Task {
 				user.log(`continued trip of ${quantity}x ${ore.name}[${ore.id}]`);
 				return this.client.commands.get('mine')!.run(res, [quantity, ore.name]);
 			},
+			data,
 			undefined,
-			data
+			loot.bank
 		);
 	}
 }

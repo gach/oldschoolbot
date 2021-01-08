@@ -56,7 +56,6 @@ export default class extends Task {
 						user.log(`continued trip of Questing.`);
 						return this.client.commands.get('quest')!.run(res as KlasaMessage, []);
 				  },
-			undefined,
 			data
 		);
 	}

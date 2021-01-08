@@ -109,7 +109,6 @@ export default class extends Task {
 				user.log(`continued trip of ${quantity}x ${course.name} laps`);
 				return this.client.commands.get('laps')!.run(res, [quantity, course.aliases[0]]);
 			},
-			undefined,
 			data
 		);
 	}

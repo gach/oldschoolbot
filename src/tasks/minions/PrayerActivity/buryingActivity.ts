@@ -37,10 +37,9 @@ export default class extends Task {
 			channelID,
 			str,
 			res => {
-				user.log(`continued trip of ${quantity}x ${bone.name}[${bone.inputId}]`);
+				user.log(`continued trip of burying ${quantity}x ${bone.name}[${bone.inputId}]`);
 				return this.client.commands.get('bury')!.run(res, [quantity, bone.name]);
 			},
-			undefined,
 			data
 		);
 	}

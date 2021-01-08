@@ -72,7 +72,6 @@ export default class extends Task {
 				user.log(`continued trip of ${quantity}x ${cookable.name}[${cookable.id}]`);
 				return this.client.commands.get('cook')!.run(res, [quantity, cookable.name]);
 			},
-			undefined,
 			data
 		);
 	}

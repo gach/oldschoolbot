@@ -73,8 +73,9 @@ export default class extends Task {
 				user.log(`continued trip of ${quantity}x sepulchre`);
 				return this.client.commands.get('sepulchre')!.run(res, []);
 			},
+			data,
 			image,
-			data
+			loot.bank
 		);
 	}
 }

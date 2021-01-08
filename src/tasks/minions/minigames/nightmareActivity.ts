@@ -12,6 +12,7 @@ import { addBanks, noOp, queuedMessageSend } from '../../../lib/util';
 import { channelIsSendable } from '../../../lib/util/channelIsSendable';
 import createReadableItemListFromBank from '../../../lib/util/createReadableItemListFromTuple';
 import { getNightmareGearStats } from '../../../lib/util/getNightmareGearStats';
+import { handleTripFinish } from '../../../lib/util/handleTripFinish';
 import { randomVariation } from '../../../lib/util/randomVariation';
 import { NightmareMonster } from './../../../lib/minions/data/killableMonsters/index';
 
@@ -24,7 +25,8 @@ interface NightmareUser {
 const RawNightmare = Misc.Nightmare;
 
 export default class extends Task {
-	async run({ channelID, leader, users, quantity, duration }: NightmareActivityTaskOptions) {
+	async run(data: NightmareActivityTaskOptions) {
+		let { channelID, leader, users, quantity, duration } = data;
 		const teamsLoot: { [key: string]: ItemBank } = {};
 		const kcAmounts: { [key: string]: number } = {};
 
@@ -112,27 +114,43 @@ export default class extends Task {
 			const channel = this.client.channels.get(channelID);
 			if (!channelIsSendable(channel)) return;
 
+			let returnStr = '';
+			let image = undefined;
+
 			if (!kcAmounts[leader]) {
-				channel.send(
-					`${leaderUser}, ${leaderUser.minionName} died in all their attempts to kill the Nightmare, they apologize and promise to try harder next time.`
-				);
+				returnStr = `${leaderUser}, ${leaderUser.minionName} died in all their attempts to kill the Nightmare, they apologize and promise to try harder next time.`;
 			} else {
-				channel.sendBankImage({
-					bank: teamsLoot[leader],
-					content: `${leaderUser}, ${
-						leaderUser.minionName
-					} finished killing ${quantity} ${NightmareMonster.name}, you died ${
-						deaths[leader] ?? 0
-					} times. Your Nightmare KC is now ${
-						(leaderUser.settings.get(UserSettings.MonsterScores)[NightmareMonster.id] ??
-							0) + quantity
-					}.`,
-					title: `${quantity}x Nightmare`,
-					background: leaderUser.settings.get(UserSettings.BankBackground),
-					user: leaderUser,
-					flags: { showNewCL: 1 }
-				});
+				returnStr = `${leaderUser}, ${leaderUser.minionName} finished killing ${quantity} ${
+					NightmareMonster.name
+				}, you died ${deaths[leader] ?? 0} times. Your Nightmare KC is now ${
+					(leaderUser.settings.get(UserSettings.MonsterScores)[NightmareMonster.id] ??
+						0) + quantity
+				}.`;
+
+				image = await this.client.tasks
+					.get('bankImage')!
+					.generateBankImage(
+						teamsLoot[leader],
+						`${quantity}x Nightmare`,
+						true,
+						{ showNewCL: 1 },
+						leaderUser
+					);
 			}
+
+			handleTripFinish(
+				this.client,
+				leaderUser,
+				channelID,
+				returnStr,
+				res => {
+					leaderUser.log(`continued trip of ${quantity}x ${NightmareMonster.name}`);
+					return this.client.commands.get('nightmare')!.run(res, ['solo']);
+				},
+				data,
+				kcAmounts[leader] ? image : undefined,
+				kcAmounts[leader] ? teamsLoot[leader] : undefined
+			);
 		}
 	}
 }

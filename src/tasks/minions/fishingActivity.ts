@@ -177,8 +177,9 @@ export default class extends Task {
 				user.log(`continued trip of ${quantity}x ${fish.name}[${fish.id}]`);
 				return this.client.commands.get('fish')!.run(res, [quantity, fish.name]);
 			},
+			data,
 			undefined,
-			data
+			loot
 		);
 	}
 }
