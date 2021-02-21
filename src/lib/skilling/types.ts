@@ -21,7 +21,12 @@ export enum SkillsEnum {
 	Thieving = 'thieving',
 	Hunter = 'hunter',
 	Construction = 'construction',
-	Magic = 'magic'
+	Attack = 'attack',
+	Defence = 'defence',
+	Strength = 'strength',
+	Ranged = 'ranged',
+	Magic = 'magic',
+	Hitpoints = 'hitpoints'
 }
 
 export interface Ore {
@@ -164,6 +169,21 @@ export interface Bone {
 	inputId: number;
 }
 
+export interface Prayer {
+	level: number;
+	defLvl?: number;
+	name: string;
+	drainRate: number;
+	drainEffect: number;
+	unlocked: boolean;
+	inputId?: number;
+	qpRequired?: number;
+	offensive1?: boolean;
+	offensive2?: boolean;
+	defensive?: boolean;
+	overHead?: boolean;
+}
+
 export type LevelRequirements = Partial<
 	{
 		[key in SkillsEnum]: number;
@@ -185,11 +205,18 @@ export interface Plankable {
 }
 
 export interface Plant {
+	name: string;
+	id?: number;
 	level: number;
+	prayerxp?: number;
 	plantXp: number;
 	checkXp: number;
+	magicxp?: number;
+	category?: string;
 	harvestXp: number;
-	name: string;
+	farmingxp?: number;
+	craftingxp?: number;
+	baseMaxHit?: number;
 	inputItems: ItemBank;
 	aliases: string[];
 	outputCrop?: number;
@@ -256,4 +283,19 @@ export interface Creature {
 	qpRequired?: number;
 	slope: number;
 	intercept: number;
+}
+
+export interface Castable {
+	name: string;
+	id?: number;
+	level: number;
+	magicxp: number;
+	prayerxp?: number;
+	farmingxp?: number;
+	craftingxp?: number;
+	baseMaxHit?: number;
+	category: string;
+	inputItems: ItemBank;
+	tickRate: number;
+	outputMultiple?: number;
 }

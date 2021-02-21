@@ -6,6 +6,7 @@ import { continuationChars, Emoji, Events, PerkTier, Time } from '../../lib/cons
 import clueTiers from '../../lib/minions/data/clueTiers';
 import killableMonsters from '../../lib/minions/data/killableMonsters';
 import announceLoot from '../../lib/minions/functions/announceLoot';
+import combatXPReciever from '../../lib/minions/functions/combatXPReciever';
 import { UserSettings } from '../../lib/settings/types/UserSettings';
 import { MonsterActivityTaskOptions } from '../../lib/types/minions';
 import { randomItemFromArray } from '../../lib/util';
@@ -13,7 +14,14 @@ import { channelIsSendable } from '../../lib/util/channelIsSendable';
 import getUsersPerkTier from '../../lib/util/getUsersPerkTier';
 
 export default class extends Task {
-	async run({ monsterID, userID, channelID, quantity, duration }: MonsterActivityTaskOptions) {
+	async run({
+		monsterID,
+		userID,
+		channelID,
+		quantity,
+		duration,
+		hits
+	}: MonsterActivityTaskOptions) {
 		const monster = killableMonsters.find(mon => mon.id === monsterID)!;
 		const user = await this.client.users.fetch(userID);
 		const perkTier = getUsersPerkTier(user);
@@ -60,6 +68,11 @@ export default class extends Task {
 				str += `\n\nYou can get your minion to complete them using \`+minion clue easy/medium/etc\``;
 			}
 		}
+
+		combatXPReciever(monster, user, quantity, hits);
+		const xpString = (await combatXPReciever(monster, user, quantity, hits)).toString();
+
+		str += xpString;
 
 		user.incrementMonsterScore(monsterID, quantity);
 

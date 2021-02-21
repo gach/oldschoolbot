@@ -9,9 +9,12 @@ import clueTiers from '../../lib/minions/data/clueTiers';
 import killableMonsters from '../../lib/minions/data/killableMonsters';
 import { minionNotBusy, requiresMinion } from '../../lib/minions/decorators';
 import calculateMonsterFood from '../../lib/minions/functions/calculateMonsterFood';
+import combatCalculator from '../../lib/minions/functions/combatCalculator';
 import findMonster from '../../lib/minions/functions/findMonster';
 import reducedTimeFromKC from '../../lib/minions/functions/reducedTimeFromKC';
+import removeAmmoFromUser from '../../lib/minions/functions/removeAmmoFromUser';
 import removeFoodFromUser from '../../lib/minions/functions/removeFoodFromUser';
+import removeRunesFromUser from '../../lib/minions/functions/removeRunesFromUser';
 import { calcPOHBoosts } from '../../lib/poh';
 import { UserSettings } from '../../lib/settings/types/UserSettings';
 import { BotCommand } from '../../lib/structures/BotCommand';
@@ -24,7 +27,8 @@ import {
 	itemNameFromID,
 	randomItemFromArray,
 	randomVariation,
-	removeDuplicatesFromArray
+	removeDuplicatesFromArray,
+	round
 } from '../../lib/util';
 import addSubTaskToActivityTask from '../../lib/util/addSubTaskToActivityTask';
 import getUsersPerkTier from '../../lib/util/getUsersPerkTier';
@@ -503,6 +507,20 @@ Type \`confirm\` if you understand the above information, and want to become an 
 			foodStr = result;
 		}
 
+		const combatCalcInfo = combatCalculator(monster, msg.author, quantity);
+
+		if (!combatCalcInfo) {
+			throw `Something went wrong with combatCalculator`;
+		}
+		const [combatDuration, hits, DPS, monsterKillSpeed] = combatCalcInfo;
+
+		if (msg.author.settings.get(UserSettings.Minion.CombatSkill) === 'mage') {
+			await removeRunesFromUser(this.client, msg.author, hits);
+		}
+		if (msg.author.settings.get(UserSettings.Minion.CombatSkill) === 'range') {
+			await removeAmmoFromUser(this.client, msg.author, hits);
+		}
+
 		let duration = timeToFinish * quantity;
 		if (duration > msg.author.maxTripLength) {
 			return msg.send(
@@ -520,6 +538,7 @@ Type \`confirm\` if you understand the above information, and want to become an 
 			boosts.push(`10% for Weekend`);
 			duration *= 0.9;
 		}
+		duration = 0;
 
 		await addSubTaskToActivityTask<MonsterActivityTaskOptions>(this.client, {
 			monsterID: monster.id,
@@ -527,6 +546,7 @@ Type \`confirm\` if you understand the above information, and want to become an 
 			channelID: msg.channel.id,
 			quantity,
 			duration,
+			hits,
 			type: Activity.MonsterKilling
 		});
 
@@ -536,6 +556,12 @@ Type \`confirm\` if you understand the above information, and want to become an 
 		if (foodStr) {
 			response += ` Removed ${foodStr}.\n`;
 		}
+		response += `it'll take around ${formatDuration(
+			combatDuration * 1000
+		)} to finish. Your DPS is ${round(DPS, 2)} and average monster kill speed is ${round(
+			monsterKillSpeed,
+			2
+		)} seconds.`;
 
 		if (boosts.length > 0) {
 			response += `\n**Boosts:** ${boosts.join(', ')}.`;

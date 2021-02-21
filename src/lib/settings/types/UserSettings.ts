@@ -30,6 +30,9 @@ export namespace UserSettings {
 	export const LastDailyTimestamp = T<number>('lastDailyTimestamp');
 	export const BitField = T<readonly BitField[]>('bitfield');
 	export const FavoriteItems = T<readonly number[]>('favoriteItems');
+	export const SelectedPrayers = T<readonly string[]>('selectedPrayers');
+	export const SelectedPotions = T<readonly string[]>('selectedPotions');
+	export const UnlockedPrayers = T<readonly string[]>('unlockedPrayers');
 	export const Badges = T<readonly number[]>('badges');
 	export const RSN = T<string>('RSN');
 	export const SacrificedValue = T<number>('sacrificedValue');
@@ -68,9 +71,24 @@ export namespace UserSettings {
 		export const DefaultCompostToUse = T<CompostTier>('minion.defaultCompostToUse');
 		export const DefaultPay = T<boolean>('minion.defaultPay');
 		export const BirdhouseTraps = T<BirdhouseData>('minion.birdhouseTraps');
+		export const MeleeAttackStyle = T<string | null>('minion.meleeAttackStyle');
+		export const RangeAttackStyle = T<string | null>('minion.rangeAttackStyle');
+		export const MageAttackStyle = T<string | null>('minion.mageAttackStyle');
+		export const CastedSpell = T<string | null>('minion.castedSpell');
+		export const CombatSkill = T<string>('minion.combatSkill');
+		export const MeleeCombatStyle = T<string | null>('minion.meleeCombatStyle');
+		export const RangeCombatStyle = T<string | null>('minion.rangeCombatStyle');
+		export const MageCombatStyle = T<string | null>('minion.mageCombatStyle');
+		export const CombatSpell = T<string | null>('minion.combatSpell');
 	}
 
 	export namespace Skills {
+		export const Attack = T<number>(`skills.${SkillsEnum.Attack}`);
+		export const Strength = T<number>(`skills.${SkillsEnum.Strength}`);
+		export const Defence = T<number>(`skills.${SkillsEnum.Defence}`);
+		export const Ranged = T<number>(`skills.${SkillsEnum.Ranged}`);
+		export const Magic = T<number>(`skills.${SkillsEnum.Magic}`);
+		export const Hitpoints = T<number>(`skills.${SkillsEnum.Hitpoints}`);
 		export const Agility = T<number>(`skills.${SkillsEnum.Agility}`);
 		export const Cooking = T<number>(`skills.${SkillsEnum.Cooking}`);
 		export const Fishing = T<number>(`skills.${SkillsEnum.Fishing}`);
@@ -87,7 +105,6 @@ export namespace UserSettings {
 		export const Herblore = T<number>(`skills.${SkillsEnum.Herblore}`);
 		export const Hunter = T<number>(`skills.${SkillsEnum.Hunter}`);
 		export const Construction = T<number>(`skills.${SkillsEnum.Construction}`);
-		export const Magic = T<number>(`skills.${SkillsEnum.Magic}`);
 	}
 
 	export namespace Gear {
