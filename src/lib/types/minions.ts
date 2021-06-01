@@ -1,3 +1,5 @@
+import { Bank } from 'oldschooljs';
+
 import { MinigameKey } from '../../extendables/User/Minigame';
 import { Peak } from '../../tasks/WildernessPeakInterval';
 import { Activity } from '../constants';
@@ -138,7 +140,7 @@ export interface HunterActivityTaskOptions extends ActivityTaskOptions {
 }
 
 export interface AlchingActivityTaskOptions extends ActivityTaskOptions {
-	itemID: number;
+	alchBank: Bank;
 	quantity: number;
 	alchValue: number;
 }

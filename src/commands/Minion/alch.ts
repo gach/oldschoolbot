@@ -1,11 +1,10 @@
 import { CommandStore, KlasaMessage } from 'klasa';
 import { Bank, Util } from 'oldschooljs';
-import { Item } from 'oldschooljs/dist/meta/types';
+import Items from 'oldschooljs/dist/structures/Items';
 
 import { Activity, Time } from '../../lib/constants';
 import { minionNotBusy, requiresMinion } from '../../lib/minions/decorators';
 import { ClientSettings } from '../../lib/settings/types/ClientSettings';
-import { UserSettings } from '../../lib/settings/types/UserSettings';
 import { SkillsEnum } from '../../lib/skilling/types';
 import { BotCommand } from '../../lib/structures/BotCommand';
 import { AlchingActivityTaskOptions } from '../../lib/types/minions';
@@ -30,7 +29,7 @@ export default class extends BotCommand {
 	public constructor(store: CommandStore, file: string[], directory: string) {
 		super(store, file, directory, {
 			cooldown: 1,
-			usage: '[quantity:int{1}] <item:...item>',
+			usage: '(items:...TradeableBank)',
 			usageDelim: ' ',
 			oneAtTime: true,
 			description: 'Allows you to send your minion to alch items from your bank',
@@ -41,29 +40,64 @@ export default class extends BotCommand {
 
 	@minionNotBusy
 	@requiresMinion
-	async run(msg: KlasaMessage, [quantity = null, item]: [number | null, Item[]]) {
-		const userBank = msg.author.settings.get(UserSettings.Bank);
-		const osItem = item.find(i => userBank[i.id] && i.highalch && i.tradeable);
-		if (!osItem) {
-			return msg.send(`You don't have any of this item to alch.`);
+	async run(msg: KlasaMessage, [[bankSelected]]: [[Bank]]) {
+		if (bankSelected === undefined) {
+			throw 'You must specify item[s] to alch.';
 		}
 
-		if (msg.author.skillLevel(SkillsEnum.Magic) < 55) {
-			return msg.send(`You need level 55 Magic to cast High Alchemy`);
+		if (!msg.author.bank().fits(bankSelected)) {
+			throw "You don't have all of those items.";
 		}
 
 		// 5 tick action
 		const timePerAlch = Time.Second * 3;
 		const maxTripLength = msg.author.maxTripLength(Activity.Alching);
 
-		const maxCasts = Math.min(Math.floor(maxTripLength / timePerAlch), userBank[osItem.id]);
+		let maxRemaining = Math.floor(maxTripLength / timePerAlch);
 
-		if (!quantity) {
-			quantity = maxCasts;
+		let quantity = 0;
+		let alchValue = 0;
+
+		let bankToAlch = new Bank();
+
+		for (const [itemID, qty] of Object.entries(bankSelected.bank)) {
+			const item = Items.get(parseInt(itemID));
+			if (!(item!.highalch && item!.tradeable)) {
+				if (Object.keys(msg.flagArgs).length > 0) {
+					continue;
+				} else {
+					throw 'Not all selected items are alchable.';
+				}
+			}
+
+			// Subtract quantities used until we reach max.
+			let qtyUsable = qty > maxRemaining ? maxRemaining : qty;
+
+			maxRemaining -= qtyUsable;
+			if (maxRemaining < 0) {
+				maxRemaining = 0;
+			}
+			if (qtyUsable <= 0) {
+				continue;
+			}
+			bankToAlch.add(item!.id, qtyUsable);
+			quantity += qtyUsable;
+			alchValue += qtyUsable * item!.highalch;
+		}
+
+		if (quantity === 0) {
+			return msg.send(`No items selected to alch!`);
+		}
+		const maxCasts = Math.min(Math.floor(maxTripLength / timePerAlch), quantity);
+
+		if (msg.author.skillLevel(SkillsEnum.Magic) < 55) {
+			return msg.send(`You need level 55 Magic to cast High Alchemy`);
 		}
 
 		if (quantity * timePerAlch > maxTripLength) {
-			return msg.send(`The max number of alchs you can do is ${maxCasts}!`);
+			return msg.send(
+				`The max number of alchs you can do is ${maxCasts}!\nYou've chosen: ${bankToAlch}`
+			);
 		}
 
 		const duration = quantity * timePerAlch;
@@ -76,12 +110,11 @@ export default class extends BotCommand {
 			}
 		}
 
-		const alchValue = quantity * osItem.highalch;
 		const consumedItems = new Bank({
 			...(fireRuneCost > 0 ? { 'Fire rune': fireRuneCost } : {}),
 			'Nature rune': quantity
 		});
-		consumedItems.add(osItem.id, quantity);
+		consumedItems.add(bankToAlch);
 
 		if (!msg.author.owns(consumedItems)) {
 			return msg.send(`You don't have the required items, you need ${consumedItems}`);
@@ -89,7 +122,7 @@ export default class extends BotCommand {
 
 		if (!msg.flagArgs.confirm && !msg.flagArgs.cf) {
 			const alchMessage = await msg.channel.send(
-				`${msg.author}, say \`confirm\` to alch ${quantity} ${osItem.name} (${Util.toKMB(
+				`${msg.author}, say \`confirm\` to alch ${bankToAlch.toString()} (${Util.toKMB(
 					alchValue
 				)}). This will take approximately ${formatDuration(
 					duration
@@ -108,7 +141,7 @@ export default class extends BotCommand {
 					}
 				);
 			} catch (err) {
-				return alchMessage.edit(`Cancelling alch of ${quantity}x ${osItem.name}.`);
+				return alchMessage.edit(`Cancelling alch of ${bankToAlch.toString()}.`);
 			}
 		}
 
@@ -120,7 +153,7 @@ export default class extends BotCommand {
 		);
 
 		await addSubTaskToActivityTask<AlchingActivityTaskOptions>(this.client, {
-			itemID: osItem.id,
+			alchBank: bankToAlch,
 			userID: msg.author.id,
 			channelID: msg.channel.id,
 			quantity,
@@ -129,11 +162,13 @@ export default class extends BotCommand {
 			type: Activity.Alching
 		});
 
-		msg.author.log(`alched Quantity[${quantity}] ItemID[${osItem.id}] for ${alchValue}`);
+		msg.author.log(`alched ${bankToAlch.toString()} for ${alchValue}`);
 
-		const response = `${msg.author.minionName} is now alching ${quantity}x ${
-			osItem.name
-		}, it'll take around ${formatDuration(duration)} to finish.`;
+		const response = `${
+			msg.author.minionName
+		} is now alching  ${bankToAlch.toString()}, it'll take around ${formatDuration(
+			duration
+		)} to finish.`;
 
 		return msg.send(response);
 	}
