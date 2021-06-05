@@ -1,5 +1,6 @@
+import { KlasaClient } from 'klasa';
 import numbro from 'numbro';
-import { Bank } from 'oldschooljs';
+import { Bank, Util } from 'oldschooljs';
 import { Item } from 'oldschooljs/dist/meta/types';
 
 import { MAX_INT_JAVA } from '../constants';
@@ -47,12 +48,61 @@ export function parseStringBank(str = ''): [Item, number][] {
 }
 
 interface ParseBankOptions {
+	client?: KlasaClient;
 	inputBank: Bank;
 	flags?: Record<string, string>;
 	inputStr?: string;
 }
 
-export function parseBank({ inputBank, inputStr, flags = {} }: ParseBankOptions): Bank {
+export enum FilterType {
+	lessThan,
+	equals,
+	greaterThan
+}
+
+export function satisfiesQuantitativeFilter(
+	subject: number,
+	filter: FilterType,
+	target: number
+): boolean {
+	switch (filter) {
+		case FilterType.lessThan:
+			return subject < target;
+		case FilterType.equals:
+			return subject === target;
+		case FilterType.greaterThan:
+			return subject > target;
+	}
+	return true;
+}
+
+export function parseFilterAndTarget(input: string | null): [FilterType, number] | [null, null] {
+	if (!input) return [null, null];
+	let value = Util.fromKMB(input);
+
+	if (value || input === '0') {
+		return [FilterType.equals, value];
+	} else if (input.startsWith('>')) {
+		value = Util.fromKMB(input.replace('>', ''));
+		if (value) {
+			return [FilterType.greaterThan, value];
+		}
+	} else if (input.startsWith('<')) {
+		value = Util.fromKMB(input.replace('<', ''));
+		if (value) {
+			return [FilterType.lessThan, value];
+		}
+	}
+
+	return [null, null];
+}
+
+export async function parseBank({
+	client,
+	inputBank,
+	inputStr,
+	flags = {}
+}: ParseBankOptions): Promise<Bank> {
 	const items = inputBank.items();
 
 	if (inputStr) {
@@ -67,6 +117,9 @@ export function parseBank({ inputBank, inputStr, flags = {} }: ParseBankOptions)
 	const filter = filterableTypes.find(type =>
 		type.aliases.some(alias => flagsKeys.includes(alias))
 	);
+	const [priceFilter, priceTarget] = parseFilterAndTarget(flags.price);
+	const [stackPriceFilter, stackPriceTarget] = parseFilterAndTarget(flags.stackprice);
+	const [quantityFilter, quantityTarget] = parseFilterAndTarget(flags.quantity);
 
 	const outputBank = new Bank();
 
@@ -80,8 +133,41 @@ export function parseBank({ inputBank, inputStr, flags = {} }: ParseBankOptions)
 		) {
 			continue;
 		}
+		if (
+			priceFilter !== null &&
+			priceTarget !== null &&
+			client &&
+			!satisfiesQuantitativeFilter(
+				await client.fetchItemPrice(item.id),
+				priceFilter,
+				priceTarget
+			)
+		) {
+			continue;
+		}
+		if (
+			quantityFilter !== null &&
+			quantityTarget !== null &&
+			!satisfiesQuantitativeFilter(_qty, quantityFilter, quantityTarget)
+		) {
+			continue;
+		}
 
 		const qty = _qty === 0 ? Math.max(1, inputBank.amount(item.id)) : _qty;
+
+		if (
+			stackPriceFilter !== null &&
+			stackPriceTarget !== null &&
+			client &&
+			!satisfiesQuantitativeFilter(
+				(await client.fetchItemPrice(item.id)) * qty,
+				stackPriceFilter,
+				stackPriceTarget
+			)
+		) {
+			continue;
+		}
+
 		if (filter && !filter.items.includes(item.id)) continue;
 
 		if (inputBank.amount(item.id) < qty) continue;
