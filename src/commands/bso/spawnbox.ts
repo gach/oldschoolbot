@@ -27,7 +27,8 @@ export default class extends BotCommand {
 		}
 
 		if (msg.author.id !== '157797566833098752' && msg.channel.id !== '732207379818479756') {
-			return msg.send(`You can only use this in the BSO channel.`);
+			return msg.send(`
+You can only spawn boxes in #bot-channel-bso in the oldschool.gg server.`);
 		}
 		const item = randArrItem([
 			itemChallenge,
