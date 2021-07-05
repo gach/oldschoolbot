@@ -57,6 +57,9 @@ export default async function removeFoodFromUser({
 		updateBankSetting(client, ClientSettings.EconomyStats.PVMCost, foodToRemove);
 
 		let reductionsStr = reductions.length > 0 ? ` **Base Food Reductions:** ${reductions.join(', ')}.` : '';
-		return [`${new Bank(foodToRemove)} from ${user.username}${reductionsStr}`, foodToRemove];
+		return [
+			totalHealingNeeded > 0 ? `${new Bank(foodToRemove)} from ${user.username}${reductionsStr}` : '',
+			foodToRemove
+		];
 	}
 }

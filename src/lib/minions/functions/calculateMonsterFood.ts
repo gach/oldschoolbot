@@ -1,7 +1,7 @@
 import { KlasaUser } from 'klasa';
 import { O } from 'ts-toolbelt';
 
-import { GearSetupTypes, GearStat, maxDefenceStats, maxOffenceStats } from '../../gear';
+import { GearSetupTypes, GearStat, maxDefenceStats, maxOffenceStats, maxOtherStats } from '../../gear';
 import { inverseOfOffenceStat } from '../../gear/functions/inverseOfStat';
 import { calcWhatPercent, reduceNumByPercent } from '../../util';
 import { KillableMonster } from '../types';
@@ -10,7 +10,8 @@ const { floor, max } = Math;
 
 export default function calculateMonsterFood(
 	monster: O.Readonly<KillableMonster>,
-	user: O.Readonly<KlasaUser>
+	user: O.Readonly<KlasaUser>,
+	burstOrBarrage: boolean = false
 ): [number, string[]] {
 	const messages: string[] = [];
 	let { healAmountNeeded, attackStyleToUse, attackStylesUsed } = monster;
@@ -34,7 +35,24 @@ export default function calculateMonsterFood(
 			break;
 	}
 
-	const gearStats = user.getGear(gearToCheck).stats;
+	if (burstOrBarrage) {
+		attackStyleToUse = GearStat.AttackMagic;
+		gearToCheck = GearSetupTypes.Mage;
+	}
+
+	const gear = user.getGear(gearToCheck);
+	const gearStats = gear.stats;
+
+	if (gearToCheck === GearSetupTypes.Melee) {
+		attackStyleToUse = GearStat[gear.getHighestMeleeStat()];
+	}
+
+	const strengthStat =
+		gearToCheck === GearSetupTypes.Melee
+			? GearStat.MeleeStrength
+			: gearToCheck === GearSetupTypes.Range
+			? GearStat.RangedStrength
+			: GearStat.MagicDamage;
 
 	let totalPercentOfGearLevel = 0;
 	let totalOffensivePercent = 0;
@@ -48,16 +66,28 @@ export default function calculateMonsterFood(
 		messages.push(`Your ${inverseStyle} bonus is ${percent}% of the best (${usersStyle} out of ${maxStyle})`);
 		totalPercentOfGearLevel += percent;
 	}
+	totalPercentOfGearLevel *= 0.5;
+	const usersStyleOff = gearStats[attackStyleToUse];
+	const maxStyleOff = maxOffenceStats[attackStyleToUse];
+	const offPercent = floor(calcWhatPercent(usersStyleOff, maxStyleOff) * 0.75);
+	messages.push(
+		`Your ${attackStyleToUse} bonus is ${offPercent}% of the best (${usersStyleOff} out of ${maxStyleOff})`
+	);
+	totalOffensivePercent = offPercent;
 
-	totalOffensivePercent = floor(calcWhatPercent(gearStats[attackStyleToUse], maxOffenceStats[attackStyleToUse]));
+	const maxUserStr = gearStats[strengthStat];
+	const maxStr = maxOtherStats[strengthStat];
+	const strPercent = floor(calcWhatPercent(maxUserStr, maxStr));
+	messages.push(`Your ${strengthStat} bonus is ${strPercent}% of the best (${maxUserStr} out of ${maxStr})`);
+	totalOffensivePercent += strPercent / 2;
 
-	// Get average of all defensive%'s and limit it to a cap of 95
-	totalPercentOfGearLevel = Math.min(floor(max(0, totalPercentOfGearLevel / attackStylesUsed.length)), 95);
-	// Floor at 0 and cap at 95
-	totalOffensivePercent = Math.min(floor(max(0, totalOffensivePercent)), 95);
+	// Get average of all defensive%'s and limit it to a cap of 50
+	totalPercentOfGearLevel = Math.min(floor(max(0, totalPercentOfGearLevel / attackStylesUsed.length)), 50);
+	// Floor at 0 and cap at 75
+	totalOffensivePercent = Math.min(floor(max(0, totalOffensivePercent)), 75);
 
 	messages.push(`You use ${floor(totalPercentOfGearLevel)}% less food because of your defensive stats.`);
-	healAmountNeeded = floor(reduceNumByPercent(healAmountNeeded, totalPercentOfGearLevel));
+	healAmountNeeded = reduceNumByPercent(healAmountNeeded, totalPercentOfGearLevel);
 	messages.push(`You use ${floor(totalOffensivePercent)}% less food because of your offensive stats.`);
 	healAmountNeeded = floor(reduceNumByPercent(healAmountNeeded, totalOffensivePercent));
 
