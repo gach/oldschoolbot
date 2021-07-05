@@ -2,7 +2,6 @@ import { CommandStore, KlasaMessage, KlasaUser } from 'klasa';
 import { Bank, Monsters } from 'oldschooljs';
 
 import { Activity, Time } from '../../lib/constants';
-import { getSimilarItems } from '../../lib/data/similarItems';
 import fightCavesSupplies from '../../lib/minions/data/fightCavesSupplies';
 import { minionNotBusy, requiresMinion } from '../../lib/minions/decorators';
 import { ClientSettings } from '../../lib/settings/types/ClientSettings';
@@ -154,7 +153,7 @@ export default class extends BotCommand {
 			usersTask.currentTask!.quantityRemaining === usersTask.currentTask!.quantity;
 
 		// 15% boost for on task
-		if (isOnTask && msg.author.hasItemEquippedAnywhere(getSimilarItems(itemID('Black mask (i)')))) {
+		if (isOnTask && msg.author.hasItemEquippedOrInBank('Black mask (i)')) {
 			duration *= 0.85;
 			debugStr = debugStr === '' ? '15% on Task with Black mask (i)' : ', 15% on Task with Black mask (i)';
 		}
