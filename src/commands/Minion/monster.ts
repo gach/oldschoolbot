@@ -1,15 +1,30 @@
 import { MessageAttachment } from 'discord.js';
 import { Time } from 'e';
 import { CommandStore, KlasaMessage } from 'klasa';
+import { SkillsEnum } from 'oldschooljs/dist/constants';
+import { MonsterAttribute } from 'oldschooljs/dist/meta/monsterData';
 
 import { Activity } from '../../lib/constants';
 import killableMonsters from '../../lib/minions/data/killableMonsters';
 import { requiresMinion } from '../../lib/minions/decorators';
+import { resolveAttackStyles } from '../../lib/minions/functions';
 import calculateMonsterFood from '../../lib/minions/functions/calculateMonsterFood';
 import reducedTimeFromKC from '../../lib/minions/functions/reducedTimeFromKC';
+import { calcPOHBoosts } from '../../lib/poh';
 import { UserSettings } from '../../lib/settings/types/UserSettings';
 import { BotCommand } from '../../lib/structures/BotCommand';
-import { calcWhatPercent, formatDuration, formatItemBoosts, formatItemReqs, itemNameFromID } from '../../lib/util';
+import {
+	addArrayOfNumbers,
+	calcWhatPercent,
+	formatDuration,
+	formatItemBoosts,
+	formatItemReqs,
+	formatPohBoosts,
+	itemNameFromID,
+	reduceNumByPercent,
+	round,
+	stringMatches
+} from '../../lib/util';
 import findMonster from '../../lib/util/findMonster';
 
 export default class MinionCommand extends BotCommand {
@@ -27,6 +42,13 @@ export default class MinionCommand extends BotCommand {
 	@requiresMinion
 	async run(msg: KlasaMessage, [name = '']: [string]) {
 		const monster = findMonster(name);
+		const user = msg.author;
+
+		if (stringMatches(name, 'nightmare')) {
+			return msg.channel.send(
+				'The Nightmare is not supported by this command due to the complexity of the fight.'
+			);
+		}
 
 		if (!monster) {
 			return msg.channel.send({
@@ -40,35 +62,69 @@ export default class MinionCommand extends BotCommand {
 			});
 		}
 
-		const userKc = msg.author.settings.get(UserSettings.MonsterScores)[monster.id] ?? 0;
+		const userKc = user.getKC(monster.id);
 		let [timeToFinish, percentReduced] = reducedTimeFromKC(monster, userKc);
 
 		const ownedBoostItems = [];
 		let totalItemBoost = 0;
-		for (const [itemID, boostAmount] of Object.entries(msg.author.resolveAvailableItemBoosts(monster))) {
+		for (const [itemID, boostAmount] of Object.entries(user.resolveAvailableItemBoosts(monster))) {
 			timeToFinish *= (100 - boostAmount) / 100;
 			totalItemBoost += boostAmount;
 			ownedBoostItems.push(itemNameFromID(parseInt(itemID)));
 		}
-		const maxCanKill = Math.floor(msg.author.maxTripLength(Activity.MonsterKilling) / timeToFinish);
 
-		const QP = msg.author.settings.get(UserSettings.QP);
+		if (monster.pohBoosts) {
+			const [boostPercent] = calcPOHBoosts(await msg.author.getPOH(), monster.pohBoosts);
+			if (boostPercent > 0) {
+				timeToFinish = reduceNumByPercent(timeToFinish, boostPercent);
+			}
+		}
 
-		const str = [];
+		const [, osjsMon, attackStyles] = resolveAttackStyles(user, {
+			monsterID: monster.id
+		});
+
+		const skillTotal = addArrayOfNumbers(attackStyles.map(s => user.skillLevel(s)));
+
+		let percent = round(calcWhatPercent(skillTotal, attackStyles.length * 99), 2);
+
+		const str = [`**${monster.name}**\n`];
+
+		let skillString = '';
+
+		if (percent < 50) {
+			percent = 50 - percent;
+			skillString = `**Skills boost:** -${percent.toFixed(2)}% for your skills.\n`;
+		} else {
+			percent = Math.min(15, percent / 6.5);
+			skillString = `**Skills boost:** ${percent.toFixed(2)}% for your skills.\n`;
+		}
+
+		timeToFinish = reduceNumByPercent(timeToFinish, percent);
+
+		const maxCanKill = Math.floor(user.maxTripLength(Activity.MonsterKilling) / timeToFinish);
+
+		const QP = user.settings.get(UserSettings.QP);
+
+		str.push(`**Barrage/Burst**: ${monster.canBarrage ? 'Yes' : 'No'}`);
+		str.push(
+			`**Cannon**: ${monster.canCannon ? `Yes, ${monster.cannonMulti ? 'multi' : 'single'} combat area` : 'No'}\n`
+		);
+
 		if (monster.qpRequired) {
-			str.push(`${monster.name} requires **${monster.qpRequired}qp** to kill, and you have ${QP}qp.\n`);
+			str.push(`**${monster.qpRequired}qp** to kill, and you have ${QP}qp.\n`);
 		}
 		if (monster.itemsRequired && monster.itemsRequired.length > 0) {
 			str.push(`**Items Required:** ${formatItemReqs(monster.itemsRequired)}\n`);
 		}
 
-		if (monster.healAmountNeeded && 1 > 2) {
+		if (monster.healAmountNeeded) {
 			str.push(`**Healing Required:** ${monster.healAmountNeeded}hp per kill`);
-			const [hpNeededPerKill] = calculateMonsterFood(monster, msg.author);
+			const [hpNeededPerKill] = calculateMonsterFood(monster, user);
 			str.push(
-				`With your current gear you only need ${hpNeededPerKill}hp (${
+				`With your current gear you only need ${hpNeededPerKill}hp (${(
 					100 - calcWhatPercent(hpNeededPerKill, monster.healAmountNeeded)
-				}% less)\n ${hpNeededPerKill * maxCanKill}hp for a full trip.\n`
+				).toFixed(2)}% less)\n ${hpNeededPerKill * maxCanKill}hp for a full trip.\n`
 			);
 		}
 
@@ -77,6 +133,27 @@ export default class MinionCommand extends BotCommand {
 			if (totalItemBoost) {
 				str.push(`You own ${ownedBoostItems.join(', ')} for a total boost of **${totalItemBoost}**%.\n`);
 			}
+		}
+
+		str.push(skillString);
+
+		if (monster.pohBoosts) {
+			str.push(`**Player Owned House Boosts:**\n${formatPohBoosts(monster.pohBoosts)}`);
+		}
+
+		// Removed vorkath because he has a special boost.
+		if (monster.name.toLowerCase() !== 'vorkath' && osjsMon?.data?.attributes?.includes(MonsterAttribute.Dragon)) {
+			if (
+				!monster.disallowedAttackStyles ||
+				!monster.disallowedAttackStyles.includes(SkillsEnum.Attack) ||
+				!monster.disallowedAttackStyles.includes(SkillsEnum.Strength)
+			) {
+				str.push('You get 15% for Dragon hunter lance if you use melee.');
+			}
+			if (!monster.disallowedAttackStyles || !monster.disallowedAttackStyles.includes(SkillsEnum.Ranged)) {
+				str.push('You get 15% for Dragon hunter crossbow if you use ranged.');
+			}
+			str.push('');
 		}
 
 		str.push(`The normal time to kill ${monster.name} is ${formatDuration(monster.timeToFinish)}.`);
@@ -90,10 +167,10 @@ export default class MinionCommand extends BotCommand {
 
 		str.push(`You currently recieve a ${percentReduced}% boost with your ${userKc}kc.\n`);
 
-		str.push(`**Maximum Trip Length:** ${formatDuration(msg.author.maxTripLength(Activity.MonsterKilling))}.\n`);
+		str.push(`**Maximum Trip Length:** ${formatDuration(user.maxTripLength(Activity.MonsterKilling))}.\n`);
 
 		str.push(
-			`This means the most you can kill with your current item and KC boosts is ${maxCanKill} (${formatDuration(
+			`This means the most you can kill with your current boosts is ${maxCanKill} (${formatDuration(
 				timeToFinish
 			)} per kill).\n`
 		);
