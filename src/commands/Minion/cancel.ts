@@ -4,7 +4,7 @@ import { Activity } from '../../lib/constants';
 import { requiresMinion } from '../../lib/minions/decorators';
 import { cancelTask, getActivityOfUser } from '../../lib/settings/settings';
 import { BotCommand } from '../../lib/structures/BotCommand';
-import { NightmareActivityTaskOptions, RaidsOptions } from './../../lib/types/minions';
+import { NightmareActivityTaskOptions, RaidsTaskOptions } from '../../lib/types/minions';
 
 export default class extends BotCommand {
 	public constructor(store: CommandStore, file: string[], directory: string) {
@@ -24,6 +24,12 @@ export default class extends BotCommand {
 		if (!currentTask) {
 			return msg.channel.send(
 				`${msg.author.minionName} isn't doing anything at the moment, so there's nothing to cancel.`
+			);
+		}
+
+		if (currentTask.type === Activity.Lfg) {
+			return msg.channel.send(
+				`${msg.author.minionName} is in a group trip, their team wouldn't like it if they left!`
 			);
 		}
 
@@ -55,7 +61,7 @@ export default class extends BotCommand {
 		}
 
 		if (currentTask.type === Activity.Raids) {
-			const data = currentTask as RaidsOptions;
+			const data = currentTask as RaidsTaskOptions;
 			if (data.users.length > 1) {
 				return msg.channel.send(
 					`${msg.author.minionName} is currently doing the Chamber's of Xeric, they cannot leave their team!`

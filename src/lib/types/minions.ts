@@ -289,7 +289,7 @@ export interface GroupMonsterActivityTaskOptions extends MonsterActivityTaskOpti
 	users: string[];
 }
 
-export interface RaidsOptions extends ActivityTaskOptions {
+export interface RaidsTaskOptions extends ActivityTaskOptions {
 	leader: string;
 	users: string[];
 	challengeMode: boolean;
@@ -305,13 +305,24 @@ export interface BlastFurnaceActivityTaskOptions extends ActivityTaskOptions {
 	quantity: number;
 }
 
+export interface LfgActivityTaskOptions extends ActivityTaskOptions {
+	queueId: number;
+	channelID: string;
+	quantity: number;
+	users: string[];
+	leader: string;
+	duration: number;
+	channels: Record<string, string[]>;
+	extras: Record<string, any>;
+}
+
 export type ActivityTaskData =
 	| ActivityTaskOptions
 	| MonsterActivityTaskOptions
 	| BlastFurnaceActivityTaskOptions
 	| WoodcuttingActivityTaskOptions
 	| CollectingOptions
-	| RaidsOptions
+	| RaidsTaskOptions
 	| MinigameActivityTaskOptions
 	| GauntletOptions
 	| SoulWarsOptions
@@ -325,4 +336,5 @@ export type ActivityTaskData =
 	| HerbloreActivityTaskOptions
 	| FletchingActivityTaskOptions
 	| RunecraftActivityTaskOptions
+	| LfgActivityTaskOptions
 	| TempleTrekkingActivityTaskOptions;
