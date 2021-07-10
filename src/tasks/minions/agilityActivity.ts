@@ -1,25 +1,100 @@
-import { increaseNumByPercent, randInt, roll, Time } from 'e';
+import { increaseNumByPercent, objectEntries, randInt, roll, Time } from 'e';
 import { Task } from 'klasa';
 import { Bank } from 'oldschooljs';
 
+import { GlobetrottlerOutfit } from '../../commands/Minion/mclue';
 import { Activity, Emoji, Events, MIN_LENGTH_FOR_PET } from '../../lib/constants';
+import { globetrotterReqs } from '../../lib/customItems';
 import { FaladorDiary, userhasDiaryTier } from '../../lib/diaries';
 import { ClientSettings } from '../../lib/settings/types/ClientSettings';
 import { UserSettings } from '../../lib/settings/types/UserSettings';
 import Agility from '../../lib/skilling/skills/agility';
 import { SkillsEnum } from '../../lib/skilling/types';
 import { AgilityActivityTaskOptions } from '../../lib/types/minions';
-import { addItemToBank, randomVariation, updateGPTrackSetting } from '../../lib/util';
+import { addItemToBank, itemID, rand, randomVariation, toTitleCase, updateGPTrackSetting } from '../../lib/util';
 import getOSItem from '../../lib/util/getOSItem';
 import { handleTripFinish } from '../../lib/util/handleTripFinish';
+import { sendToChannelID } from '../../lib/util/webhook';
+
+const globetrotterTicketPiece: Record<number, number> = {
+	[itemID('Globetrotter message (beginner)')]: itemID('Globetrotter headress'),
+	[itemID('Globetrotter message (easy)')]: itemID('Globetrotter top'),
+	[itemID('Globetrotter message (medium)')]: itemID('Globetrotter legs'),
+	[itemID('Globetrotter message (hard)')]: itemID('Globetrotter gloves'),
+	[itemID('Globetrotter message (elite)')]: itemID('Globetrotter boots'),
+	[itemID('Globetrotter message (master)')]: itemID('Globetrotter backpack')
+};
+
+function getChallengeXp(xpMultiplier: number) {
+	const xpReceived: Record<string, number> = {};
+	Object.keys(globetrotterReqs).map(async skill => (xpReceived[skill] = rand(25_000, 75_000) * xpMultiplier));
+	return xpReceived;
+}
 
 export default class extends Task {
 	async run(data: AgilityActivityTaskOptions) {
-		let { courseID, quantity, userID, channelID, duration, alch } = data;
+		let { courseID, quantity, userID, channelID, duration, alch, ticketID } = data;
 		const user = await this.client.users.fetch(userID);
 		const currentLevel = user.skillLevel(SkillsEnum.Agility);
 
 		const course = Agility.Courses.find(course => course.name === courseID)!;
+
+		// Challenge mode pieces missing, in case we need to add them back.
+		const piecesMissing = new Bank();
+		let piecesMissingStr = '';
+
+		if (course.name === 'Gielinor Challenge Course') {
+			if (!new Bank(user.collectionLog).has(GlobetrottlerOutfit)) {
+				let xpMultiplier = 0;
+				let xpToReceive: Record<string, number> = {};
+				try {
+					const totalSucessfulLaps = user.settings.get(UserSettings.LapsScores)[course.id] ?? 0;
+					// Makes sure the first try is a success
+					if (roll(Math.max(2, totalSucessfulLaps + 2))) {
+						await user.settings.update(
+							UserSettings.LapsScores,
+							addItemToBank(user.settings.get(UserSettings.LapsScores), course.id, 1)
+						);
+						xpMultiplier = totalSucessfulLaps + 2;
+						await user.addItemsToBank({ [globetrotterTicketPiece[ticketID!]]: 1 }, true);
+						xpToReceive = getChallengeXp(xpMultiplier);
+						return sendToChannelID(this.client, channelID, {
+							content: `You beat the Gielinor Challenge for the ${totalSucessfulLaps + 1}${
+								['st', 'nd', 'rd'][totalSucessfulLaps % 10] || 'th'
+							} time! Congratulations! As your prize, you receive **${objectEntries(xpToReceive)
+								.map(value => `${value[1].toLocaleString()} XP in ${toTitleCase(value[0])}`)
+								.join(', ')}** and a special **${getOSItem(globetrotterTicketPiece[ticketID!]).name}**!`
+						});
+					}
+					xpMultiplier = rand(1, totalSucessfulLaps ?? 1);
+					xpToReceive = getChallengeXp(xpMultiplier);
+					return sendToChannelID(this.client, channelID, {
+						content: `You failed the Gielinor Challenge. You still managed to get ${objectEntries(
+							xpToReceive
+						)
+							.map(value => `${value[1].toLocaleString()} XP in ${toTitleCase(value[0])}`)
+							.join(', ')}. Try again!`
+					});
+				} finally {
+					Object.entries(xpToReceive).map(async skill =>
+						user.addXP({
+							skillName: SkillsEnum[skill[0] as keyof typeof SkillsEnum],
+							amount: skill[1],
+							duration
+						})
+					);
+				}
+			} else {
+				// Check if the user still have the outfit pieces in the bank or equipped. Give back the pieces missing.
+				GlobetrottlerOutfit.map(itemId => piecesMissing.add(itemId));
+				piecesMissing.remove(user.allItemsOwned());
+				if (piecesMissing.items().length > 0) {
+					piecesMissingStr +=
+						'The gatekeeper notices that you have lost some pieces of the globetrotter outfit and ' +
+						`give you some extra. You can see that he is really dissapointed in you and tells you to keep them safe. You receive ${piecesMissing}.`;
+				}
+			}
+		}
 
 		// Calculate failed laps
 		let lapsFailed = 0;
@@ -69,6 +144,8 @@ export default class extends Task {
 		const loot = new Bank({
 			'Mark of grace': totalMarks
 		});
+
+		loot.add(piecesMissing);
 
 		if (alch) {
 			const alchedItem = getOSItem(alch.itemID);
@@ -144,6 +221,10 @@ export default class extends Task {
 				Events.ServerNotification,
 				`${Emoji.Agility} **${user.username}'s** minion, ${user.minionName}, just received a Giant squirrel while running ${course.name} laps at level ${currentLevel} Agility!`
 			);
+		}
+
+		if (piecesMissingStr) {
+			str += `\n\n${piecesMissingStr}\n\n`;
 		}
 
 		await user.addItemsToBank(loot, true);

@@ -66,7 +66,11 @@ export default class extends BotCommand {
 
 		let { tripLength } = rune;
 		const boosts = [];
-		if (msg.author.hasGracefulEquipped()) {
+		// Reduce time if user has graceful/globetrotter equipped
+		if (msg.author.hasGlobetrotterEquipped()) {
+			boosts.push('20% for having the Globetrotter Outfit');
+			tripLength -= rune.tripLength * 0.2;
+		} else if (msg.author.hasGracefulEquipped()) {
 			tripLength -= rune.tripLength * 0.1;
 			boosts.push('10% for Graceful');
 		}
@@ -147,7 +151,7 @@ export default class extends BotCommand {
 		}, it'll take around ${formatDuration(
 			duration
 		)} to finish, this will take ${numberOfInventories}x trips to the altar.
-		
+
 **Boosts:** ${boosts.join(', ')}`;
 
 		return msg.channel.send(response);
