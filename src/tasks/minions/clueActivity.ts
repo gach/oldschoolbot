@@ -20,9 +20,7 @@ export default class extends Task {
 
 		const str = `${user}, ${user.minionName} finished completing ${quantity} ${clueTier.name} clues. ${
 			user.minionName
-		} carefully places the reward casket${
-			quantity > 1 ? 's' : ''
-		} in your bank. You can open this casket using \`+open ${clueTier.name}\``;
+		} carefully places the reward casket${quantity > 1 ? 's' : ''} in your bank.`;
 
 		const loot = { [clueTier.id]: quantity };
 		await user.addItemsToBank(loot, true);
