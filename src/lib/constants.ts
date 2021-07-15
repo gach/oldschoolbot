@@ -277,7 +277,8 @@ export enum Activity {
 	OuraniaDeliveryService = 'OuraniaDeliveryService',
 	DarkAltar = 'DarkAltar',
 	Ignecarus = 'Ignecarus',
-	Trekking = 'Trekking'
+	Trekking = 'Trekking',
+	BaitCutting = 'BaitCutting'
 }
 
 export enum ActivityGroup {
